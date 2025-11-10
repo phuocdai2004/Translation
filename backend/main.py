@@ -9,7 +9,7 @@ from pathlib import Path
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import translation_routes, search_routes, document_routes, search_web_routes
+from app.routes import translation_routes, search_routes, document_routes, search_web_routes, tts_routes
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +36,7 @@ app.include_router(translation_routes.router, prefix="/api", tags=["translation"
 app.include_router(search_routes.router, prefix="/api", tags=["search"])
 app.include_router(search_web_routes.router, prefix="/api/search", tags=["web-search"])
 app.include_router(document_routes.router, prefix="/api", tags=["documents"])
+app.include_router(tts_routes.router, tags=["text-to-speech"])
 
 # Mount static files
 frontend_path = Path(__file__).parent.parent / "frontend"

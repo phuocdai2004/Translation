@@ -331,6 +331,59 @@ function displayWebSearchResults(data) {
     stats.textContent = `Found ${data.total_results} result(s)`;
 }
 
+// Text-to-Speech Functions
+document.getElementById('speakTranslationBtn')?.addEventListener('click', async function() {
+    const text = document.getElementById('targetText').value.trim();
+    const targetLang = document.getElementById('targetLang').value;
+    
+    if (!text) {
+        showAlert('No text to speak', 'warning');
+        return;
+    }
+    
+    const btn = this;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Loading...';
+    
+    try {
+        // Get language code for TTS
+        let ttsLang = targetLang === 'vi' ? 'vi' : 'en';
+        
+        const response = await fetch(`${API_BASE}/api/tts/speak`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                text: text,
+                language: ttsLang,
+                rate: 1.0,
+                pitch: 0
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('TTS generation failed');
+        }
+        
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create and play audio
+        const audio = new Audio(audioUrl);
+        audio.play();
+        
+        showAlert('Playing audio...', 'info');
+    } catch (error) {
+        console.error('TTS Error:', error);
+        showAlert('Error: Could not generate speech', 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    }
+});
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     loadDocuments();

@@ -225,7 +225,12 @@
 
                             <div id="translationResult" class="mt-4" style="display: none;">
                                 <label class="form-label">Translation Result</label>
-                                <textarea id="targetText" class="form-control" rows="4" readonly></textarea>
+                                <div class="d-flex gap-2 mb-2">
+                                    <textarea id="targetText" class="form-control" rows="4" readonly></textarea>
+                                    <button id="speakTranslationBtn" class="btn btn-outline-success" type="button" title="Listen to translation" style="height: fit-content; align-self: flex-start;">
+                                        <i class="bi bi-volume-up"></i> Listen
+                                    </button>
+                                </div>
                                 <small id="confidence" class="text-muted mt-2 d-block"></small>
                             </div>
                         </div>
