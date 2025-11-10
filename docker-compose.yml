@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: translation-app
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/backend
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - translation-network
+
+  # Optional: Database service for future use
+  # db:
+  #   image: postgres:15-alpine
+  #   container_name: translation-db
+  #   environment:
+  #     POSTGRES_DB: translation
+  #     POSTGRES_USER: admin
+  #     POSTGRES_PASSWORD: admin123
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - translation-network
+
+networks:
+  translation-network:
+    driver: bridge
+
+# volumes:
+#   postgres_data:
