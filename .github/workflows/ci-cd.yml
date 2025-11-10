@@ -96,7 +96,7 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Deploy to Heroku (Optional)
-      if: secrets.HEROKU_API_KEY != ''
+      if: ${{ secrets.HEROKU_API_KEY != '' }}
       uses: akhileshns/heroku-deploy@v3.12.12
       with:
         heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
@@ -106,7 +106,7 @@ jobs:
       continue-on-error: true
 
     - name: Deploy to Railway (Optional)
-      if: secrets.RAILWAY_TOKEN != ''
+      if: ${{ secrets.RAILWAY_TOKEN != '' }}
       run: |
         curl -X POST https://api.railway.app/graphql \
           -H "Content-Type: application/json" \
