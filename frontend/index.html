@@ -250,8 +250,9 @@
                             </div>
 
                             <div class="mb-3">
-                                <label for="webSearchLimit" class="form-label">Number of Results</label>
-                                <input id="webSearchLimit" type="number" class="form-control" value="5" min="1" max="20">
+                                <label for="webSearchLimit" class="form-label">Number of Results: <span id="webSearchLimitValue">5</span></label>
+                                <input id="webSearchLimit" type="range" class="form-range" value="5" min="1" max="100" style="height: 6px;">
+                                <small class="text-muted">1 - 100 results</small>
                             </div>
 
                             <button id="webSearchBtn" class="btn btn-primary btn-custom" type="button">

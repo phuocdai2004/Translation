@@ -263,6 +263,10 @@ function displaySearchResults(data) {
 }
 
 // Web Search Functions
+document.getElementById('webSearchLimit')?.addEventListener('input', function() {
+    document.getElementById('webSearchLimitValue').textContent = this.value;
+});
+
 document.getElementById('webSearchBtn')?.addEventListener('click', async function() {
     const query = document.getElementById('webSearchQuery').value.trim();
     const limit = parseInt(document.getElementById('webSearchLimit').value) || 5;
