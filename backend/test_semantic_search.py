@@ -6,31 +6,32 @@ import os
 # Set env var for better compatibility
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+print("Testing Semantic Search with Embeddings and FAISS...")
+print("=" * 70)
+
+# Clean up old data BEFORE initializing DB
+try:
+    if os.path.exists("documents.db"):
+        os.remove("documents.db")
+        print("✓ Cleaned old database")
+    # Also clean index
+    import shutil
+    if os.path.exists("data"):
+        shutil.rmtree("data")
+        print("✓ Cleaned old index")
+except Exception as e:
+    print(f"Could not remove old data: {e}")
+
 from fastapi.testclient import TestClient
 from app.database import init_db
 from main import app
 import time
 
-# Initialize database
+# Initialize database AFTER cleanup
 init_db()
 
 # Create test client
 client = TestClient(app)
-
-print("Testing Semantic Search with Embeddings and FAISS...")
-print("=" * 70)
-
-# Clean up old data
-import os
-try:
-    if os.path.exists("documents.db"):
-        os.remove("documents.db")
-        print("✓ Cleaned old database")
-except Exception as e:
-    print(f"Could not remove old database: {e}")
-
-# Re-initialize
-init_db()
 
 # Test 1: Upload documents
 print("\n1. Uploading test documents...")

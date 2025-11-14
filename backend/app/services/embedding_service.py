@@ -9,6 +9,7 @@ from typing import List, Tuple, Optional
 from pathlib import Path
 import json
 import threading
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -102,53 +103,50 @@ def add_to_index(doc_id: int, embedding: np.ndarray) -> bool:
         return False
     
     try:
+        from app.utils.embedding_utils import deserialize_embedding
+        
         with index_lock:
-            # Don't load existing index — create new one for fresh adds
-            # Annoy doesn't allow adding items to loaded indexes
             embedding_dim = len(embedding)
             
-            # Try to load existing mapping
-            if MAPPING_PATH.exists():
-                with open(MAPPING_PATH, "r") as f:
-                    doc_ids = json.load(f)
-                # Load existing index to get all vectors
-                try:
-                    init_index_dir()
-                    index = annoy.AnnoyIndex(embedding_dim, metric='euclidean')
-                    if INDEX_PATH.exists():
-                        index.load(str(INDEX_PATH))
-                    
-                    # Get all existing vectors from DB and rebuild
-                    from sqlalchemy import text
-                    # Can't access session here — rebuild instead
-                except:
-                    index = annoy.AnnoyIndex(embedding_dim, metric='euclidean')
-                    doc_ids = []
-            else:
-                doc_ids = []
-                index = annoy.AnnoyIndex(embedding_dim, metric='euclidean')
+            # Always rebuild index from DB (Annoy can't add to built index)
+            index = annoy.AnnoyIndex(embedding_dim, metric='euclidean')
+            doc_ids = []
             
-            # Add new vector
-            vector_idx = index.get_n_items()
-            index.add_item(vector_idx, embedding)
-            
-            # Append doc_id
-            doc_ids.append(doc_id)
+            try:
+                from sqlalchemy import create_engine, text
+                DB_FILE = os.environ.get("APP_DB", "documents.db")
+                db_url = f"sqlite:///{DB_FILE}"
+                engine = create_engine(db_url, connect_args={"check_same_thread": False})
+                
+                with engine.begin() as conn:
+                    result = conn.execute(
+                        text("SELECT id, embedding FROM document WHERE embedding IS NOT NULL ORDER BY id")
+                    )
+                    rows = result.fetchall()
+                    for vector_idx, (db_doc_id, embedding_bytes) in enumerate(rows):
+                        existing_emb = deserialize_embedding(embedding_bytes)
+                        if existing_emb is not None:
+                            index.add_item(vector_idx, existing_emb)
+                            doc_ids.append(db_doc_id)
+            except Exception as e:
+                logger.warning(f"Could not reload embeddings from DB: {e}")
+                return False
             
             # Build index
-            index.build(10)  # 10 trees
+            if index.get_n_items() > 0:
+                index.build(10)
             
-            # Save
-            init_index_dir()
-            with open(MAPPING_PATH, "w") as f:
-                json.dump(doc_ids, f)
-            index.save(str(INDEX_PATH))
+                # Save
+                init_index_dir()
+                with open(MAPPING_PATH, "w") as f:
+                    json.dump(doc_ids, f)
+                index.save(str(INDEX_PATH))
+                
+                # Reset global cache
+                global annoy_index
+                annoy_index = None
             
-            # Reset global
-            global annoy_index
-            annoy_index = None
-            
-            logger.info(f"+ Added doc_id={doc_id} to index (total: {index.get_n_items()})")
+            logger.info(f"+ Added doc_id={doc_id} to index (total: {len(doc_ids)})")
             return True
     except Exception as e:
         logger.error(f"Error adding to index: {e}")
