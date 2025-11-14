@@ -2,21 +2,22 @@
 Document management API routes
 """
 
-from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi import APIRouter, HTTPException, Depends
 import logging
 from typing import List
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.models.document import DocumentUpload
+from app.database import get_session
+from app.utils.embedding_utils import serialize_embedding
+import json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Temporary in-memory document store
-documents = {}
-doc_counter = 0
-
 
 @router.post("/documents/upload")
-async def upload_document(document: DocumentUpload):
+async def upload_document(document: DocumentUpload, session: Session = Depends(get_session)):
     """
     Upload and index a new document
     
@@ -29,21 +30,27 @@ async def upload_document(document: DocumentUpload):
     ### Returns:
     - Document ID and confirmation
     """
-    global doc_counter
     try:
-        doc_counter += 1
-        doc_id = f"doc_{doc_counter}"
+        # Insert into database using raw SQL
+        metadata_json = json.dumps(document.metadata or {})
+        result = session.execute(
+            text("""
+                INSERT INTO document (title, content, language, doc_metadata, created_at)
+                VALUES (:title, :content, :language, :doc_metadata, CURRENT_TIMESTAMP)
+            """),
+            {
+                "title": document.title,
+                "content": document.content,
+                "language": document.language,
+                "doc_metadata": metadata_json
+            }
+        )
+        session.commit()
+        doc_id = result.lastrowid
         
-        documents[doc_id] = {
-            "title": document.title,
-            "content": document.content,
-            "language": document.language,
-            "metadata": document.metadata or {}
-        }
+        logger.info(f"Document uploaded: id={doc_id} - {document.title}")
         
-        logger.info(f"Document uploaded: {doc_id} - {document.title}")
-        
-        # TODO: Index document with embeddings using Sentence Transformers
+        # TODO: Generate embeddings with Sentence Transformers and add to FAISS
         
         return {
             "doc_id": doc_id,
@@ -61,19 +68,24 @@ async def upload_document(document: DocumentUpload):
 
 
 @router.get("/documents/list")
-async def list_documents():
+async def list_documents(session: Session = Depends(get_session)):
     """List all uploaded documents"""
     try:
-        docs = []
-        for doc_id, doc_data in documents.items():
-            docs.append({
-                "doc_id": doc_id,
-                "title": doc_data["title"],
-                "language": doc_data["language"]
-            })
+        result = session.execute(
+            text("SELECT id, title, language, created_at FROM document ORDER BY created_at DESC")
+        )
+        docs = result.fetchall()
         
         return {
-            "documents": docs,
+            "documents": [
+                {
+                    "doc_id": doc[0],
+                    "title": doc[1],
+                    "language": doc[2],
+                    "created_at": doc[3]
+                }
+                for doc in docs
+            ],
             "total": len(docs)
         }
     
@@ -86,21 +98,30 @@ async def list_documents():
 
 
 @router.get("/documents/{doc_id}")
-async def get_document(doc_id: str):
+async def get_document(doc_id: int, session: Session = Depends(get_session)):
     """Get a specific document by ID"""
     try:
-        if doc_id not in documents:
+        result = session.execute(
+            text("SELECT id, title, content, language, doc_metadata, created_at FROM document WHERE id = :id"),
+            {"id": doc_id}
+        )
+        doc = result.fetchone()
+        
+        if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        doc = documents[doc_id]
+        metadata = json.loads(doc[4]) if doc[4] else {}
         return {
-            "doc_id": doc_id,
-            "title": doc["title"],
-            "content": doc["content"],
-            "language": doc["language"],
-            "metadata": doc["metadata"]
+            "doc_id": doc[0],
+            "title": doc[1],
+            "content": doc[2],
+            "language": doc[3],
+            "metadata": metadata,
+            "created_at": doc[5]
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get error: {e}")
         raise HTTPException(
@@ -110,14 +131,25 @@ async def get_document(doc_id: str):
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: str):
+async def delete_document(doc_id: int, session: Session = Depends(get_session)):
     """Delete a document"""
     try:
-        if doc_id not in documents:
+        # Check if document exists
+        check_result = session.execute(
+            text("SELECT id FROM document WHERE id = :id"),
+            {"id": doc_id}
+        )
+        if not check_result.fetchone():
             raise HTTPException(status_code=404, detail="Document not found")
         
-        del documents[doc_id]
-        logger.info(f"Document deleted: {doc_id}")
+        # Delete document
+        session.execute(
+            text("DELETE FROM document WHERE id = :id"),
+            {"id": doc_id}
+        )
+        session.commit()
+        
+        logger.info(f"Document deleted: id={doc_id}")
         
         return {
             "status": "deleted",
@@ -125,6 +157,8 @@ async def delete_document(doc_id: str):
             "message": "Document successfully deleted"
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Delete error: {e}")
         raise HTTPException(

@@ -10,6 +10,7 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import translation_routes, search_routes, document_routes, search_web_routes, tts_routes
+from app.database import init_db
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -59,6 +60,11 @@ async def startup_event():
     """Initialize services on startup"""
     logger.info("Starting Machine Translation & Document Search API")
     try:
+        # Initialize database
+        logger.info("Initializing database...")
+        init_db()
+        logger.info("✓ Database initialized")
+        
         logger.info("Loading translation models...")
         from app.routes.translation_routes import load_translation_models
         load_translation_models()
