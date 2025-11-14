@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.models.document import DocumentUpload
 from app.database import get_session
 from app.utils.embedding_utils import serialize_embedding
+from app.services.embedding_service import get_embedding, add_to_index
 import json
 
 router = APIRouter()
@@ -48,9 +49,25 @@ async def upload_document(document: DocumentUpload, session: Session = Depends(g
         session.commit()
         doc_id = result.lastrowid
         
-        logger.info(f"Document uploaded: id={doc_id} - {document.title}")
+        # Generate embedding and add to FAISS index
+        embedding = get_embedding(document.content)
+        if embedding is not None:
+            embedding_bytes = serialize_embedding(embedding)
+            
+            # Save embedding to database
+            session.execute(
+                text("UPDATE document SET embedding = :embedding WHERE id = :id"),
+                {"embedding": embedding_bytes, "id": doc_id}
+            )
+            session.commit()
+            
+            # Add to FAISS index
+            add_to_index(doc_id, embedding)
+            logger.info(f"✓ Embedding created and indexed for doc_id={doc_id}")
+        else:
+            logger.warning(f"Could not generate embedding for doc_id={doc_id}")
         
-        # TODO: Generate embeddings with Sentence Transformers and add to FAISS
+        logger.info(f"Document uploaded: id={doc_id} - {document.title}")
         
         return {
             "doc_id": doc_id,
