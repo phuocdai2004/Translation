@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY backend/requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
+RUN pip cache purge && pip install --user --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.11-slim
@@ -29,13 +29,13 @@ COPY --from=builder /root/.local /root/.local
 
 # Set environment variables
 ENV PATH=/root/.local/bin:$PATH \
+    PYTHONPATH=/root/.local/lib/python3.11/site-packages:$PYTHONPATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 # Copy application code
 COPY backend/ /app/backend/
 COPY frontend/ /app/frontend/
-COPY README.md /app/
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
