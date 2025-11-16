@@ -66,8 +66,7 @@ async def startup_event():
         logger.info("✓ Database initialized")
         
         logger.info("Loading translation models...")
-        from app.routes.translation_routes import load_translation_models
-        load_translation_models()
+        # Models load on-demand in routes, no need to pre-load
         logger.info("Loading search models...")
         logger.info("✓ Services initialized successfully")
     except Exception as e:

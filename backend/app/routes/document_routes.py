@@ -9,8 +9,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models.document import DocumentUpload
 from app.database import get_session
-from app.utils.embedding_utils import serialize_embedding
-from app.services.embedding_service import get_embedding, add_to_index
 import json
 
 router = APIRouter()
@@ -31,6 +29,10 @@ async def upload_document(document: DocumentUpload, session: Session = Depends(g
     ### Returns:
     - Document ID and confirmation
     """
+    # Lazy import to avoid loading transformers/torch at startup
+    from app.utils.embedding_utils import serialize_embedding
+    from app.services.embedding_service import get_embedding, add_to_index
+    
     try:
         # Insert into database using raw SQL
         metadata_json = json.dumps(document.metadata or {})
@@ -144,6 +146,70 @@ async def get_document(doc_id: int, session: Session = Depends(get_session)):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve document: {str(e)}"
+        )
+
+
+@router.put("/documents/{doc_id}")
+async def update_document(doc_id: int, document: DocumentUpload, session: Session = Depends(get_session)):
+    """Edit/Update a document"""
+    from app.utils.embedding_utils import serialize_embedding
+    from app.services.embedding_service import get_embedding, add_to_index
+    
+    try:
+        # Check if document exists
+        check_result = session.execute(
+            text("SELECT id FROM document WHERE id = :id"),
+            {"id": doc_id}
+        )
+        if not check_result.fetchone():
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Update document
+        metadata_json = json.dumps(document.metadata or {})
+        session.execute(
+            text("""
+                UPDATE document 
+                SET title = :title, content = :content, language = :language, doc_metadata = :doc_metadata
+                WHERE id = :id
+            """),
+            {
+                "title": document.title,
+                "content": document.content,
+                "language": document.language,
+                "doc_metadata": metadata_json,
+                "id": doc_id
+            }
+        )
+        session.commit()
+        
+        # Re-generate embedding
+        embedding = get_embedding(document.content)
+        if embedding is not None:
+            embedding_bytes = serialize_embedding(embedding)
+            session.execute(
+                text("UPDATE document SET embedding = :embedding WHERE id = :id"),
+                {"embedding": embedding_bytes, "id": doc_id}
+            )
+            session.commit()
+            add_to_index(doc_id, embedding)
+            logger.info(f"✓ Embedding updated for doc_id={doc_id}")
+        
+        logger.info(f"Document updated: id={doc_id} - {document.title}")
+        
+        return {
+            "doc_id": doc_id,
+            "title": document.title,
+            "status": "updated",
+            "message": "Document successfully updated and re-indexed"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update document: {str(e)}"
         )
 
 

@@ -9,8 +9,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models.document import SearchRequest, SearchResponse, SearchResult
 from app.database import get_session
-from app.services.embedding_service import get_embedding, search_index
-from app.utils.embedding_utils import deserialize_embedding
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -18,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 @router.post("/search", response_model=SearchResponse)
 async def search_documents(request: SearchRequest, session: Session = Depends(get_session)):
+    # Lazy import to avoid loading transformers/torch at startup
+    from app.services.embedding_service import get_embedding, search_index
+    from app.utils.embedding_utils import deserialize_embedding
     """
     Search documents using semantic similarity (FAISS)
     

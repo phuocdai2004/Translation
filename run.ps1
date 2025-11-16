@@ -1,35 +1,99 @@
-# Machine Translation & Document Search - PowerShell Run Script
-# Usage: .\run.ps1
+# Machine Translation & Document Search - Quick Start# Machine Translation & Document Search - Quick Start# Machine Translation & Document Search - Quick Start
 
-$ErrorActionPreference = "Stop"
+Write-Host "Starting FastAPI server..." -ForegroundColor Cyan
 
-Write-Host "===============================================" -ForegroundColor Cyan
-Write-Host "Machine Translation & Document Search" -ForegroundColor Cyan
-Write-Host "===============================================" -ForegroundColor Cyan
+Write-Host "http://127.0.0.1:8000" -ForegroundColor Green# Usage: .\run.ps1# Usage: .\run.ps1
+
 Write-Host ""
 
-$HAYSTACK_ROOT = "e:\haystack"
-$BACKEND_DIR = "$HAYSTACK_ROOT\backend"
-$VENV_PYTHON = "$HAYSTACK_ROOT\venv\Scripts\python.exe"
+
+
+Set-Location e:\haystack\backend
+
+$env:PYTHONPATH = 'e:\haystack\backend'Write-Host "========================================" -ForegroundColor CyanWrite-Host "========================================" -ForegroundColor Cyan
+
+
+
+python -c @"Write-Host "Machine Translation & Document Search" -ForegroundColor CyanWrite-Host "Machine Translation & Document Search" -ForegroundColor Cyan
+
+import sys
+
+sys.path.insert(0, r'e:\haystack\backend')Write-Host "========================================" -ForegroundColor CyanWrite-Host "========================================" -ForegroundColor Cyan
+
+from main import app
+
+import uvicornWrite-Host ""Write-Host ""
+
+uvicorn.run(app, host='127.0.0.1', port=8000, log_level='info')
+
+"@
+
+
+$BACKEND_DIR = "e:\haystack\backend"$BACKEND_DIR = "e:\haystack\backend"
+
 $FRONTEND_URL = "http://127.0.0.1:8000"
 
-# Check virtual environment
-Write-Host "[1/3] Checking dependencies..." -ForegroundColor Yellow
-if (-not (Test-Path $VENV_PYTHON)) {
-    Write-Host "ERROR: Virtual environment not found at $VENV_PYTHON" -ForegroundColor Red
-    Write-Host "Please run: python -m venv $HAYSTACK_ROOT\venv" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[✓] Virtual environment found" -ForegroundColor Green
-Write-Host ""
+Write-Host "[*] Starting FastAPI server..." -ForegroundColor Yellow
 
-# Install dependencies
-Write-Host "[2/3] Installing dependencies..." -ForegroundColor Yellow
-Set-Location $BACKEND_DIR
+Write-Host "[*] Frontend: http://127.0.0.1:8000" -ForegroundColor GreenWrite-Host "[*] Starting server..." -ForegroundColor Yellow
+
+Write-Host "[*] API Docs: http://127.0.0.1:8000/docs" -ForegroundColor GreenWrite-Host "[*] Frontend: $FRONTEND_URL" -ForegroundColor Green
+
+Write-Host "[*] Press Ctrl+C to stop" -ForegroundColor YellowWrite-Host "[*] Press Ctrl+C to stop" -ForegroundColor Yellow
+
+Write-Host ""Write-Host ""
+
+
+
+$env:PYTHONPATH = 'e:\haystack\backend'$env:PYTHONPATH = 'e:\haystack\backend'
+
+
+
+# Kill existing process on port 8000 if neededtry {
+
+$existingProcess = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -First 1    python -c "import sys; sys.path.insert(0, r'e:\haystack\backend'); from main import app; import uvicorn; uvicorn.run(app, host='127.0.0.1', port=8000)"
+
+if ($existingProcess) {}
+
+    Write-Host "[*] Port 8000 already in use, stopping existing process..." -ForegroundColor Yellowcatch {
+
+    Stop-Process -Id $existingProcess.OwningProcess -Force -ErrorAction SilentlyContinue    Write-Host "ERROR: Failed to start server" -ForegroundColor Red
+
+    Start-Sleep -Seconds 1    Write-Host $_.Exception.Message -ForegroundColor Red
+
+}    exit 1
+
+}
+
+Write-Host ""Write-Host "[✓] Virtual environment found" -ForegroundColor Green
+
+Write-Host "===============================================" -ForegroundColor CyanWrite-Host ""
+
+Write-Host "Server ready. Open browser at:" -ForegroundColor Cyan
+
+Write-Host "http://127.0.0.1:8000" -ForegroundColor Green# Install dependencies
+
+Write-Host "===============================================" -ForegroundColor CyanWrite-Host "[2/3] Installing dependencies..." -ForegroundColor Yellow
+
+Write-Host ""Set-Location $BACKEND_DIR
+
 & $VENV_PYTHON -m pip install -q -r requirements.txt
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Failed to install dependencies" -ForegroundColor Red
-    exit 1
+
+# Start the serverif ($LASTEXITCODE -ne 0) {
+
+Set-Location $BACKEND_DIR    Write-Host "ERROR: Failed to install dependencies" -ForegroundColor Red
+
+# Start the server
+Set-Location $BACKEND_DIR
+$pythonCmd = @"
+import sys
+sys.path.insert(0, r'e:\haystack\backend')
+from main import app
+import uvicorn
+uvicorn.run(app, host='127.0.0.1', port=8000, log_level='info')
+"@
+python -c $pythonCmd    exit 1
+
 }
 Write-Host "[✓] Dependencies installed" -ForegroundColor Green
 Write-Host ""

@@ -99,17 +99,22 @@ document.getElementById('uploadDocBtn')?.addEventListener('click', async functio
     const title = document.getElementById('docTitle').value.trim();
     const content = document.getElementById('docContent').value.trim();
     const language = document.getElementById('docLanguage').value;
+    const editingId = this.dataset.editingId;
     
     if (!title || !content) {
         showAlert('Please enter title and content', 'warning');
         return;
     }
     
-    showLoading('uploadDocBtn', '<i class="bi bi-cloud-upload"></i> Upload Document');
+    const isEditing = !!editingId;
+    showLoading('uploadDocBtn', '<i class="bi bi-cloud-upload"></i> Processing...');
     
     try {
-        const response = await fetch(`${API_URL}/documents/upload`, {
-            method: 'POST',
+        const url = isEditing ? `${API_URL}/documents/${editingId}` : `${API_URL}/documents/upload`;
+        const method = isEditing ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -121,22 +126,26 @@ document.getElementById('uploadDocBtn')?.addEventListener('click', async functio
         });
         
         if (!response.ok) {
-            throw new Error('Upload failed');
+            throw new Error(isEditing ? 'Update failed' : 'Upload failed');
         }
         
         const data = await response.json();
-        showAlert(`Document "${title}" uploaded successfully!`, 'success');
+        showAlert(`Document "${title}" ${isEditing ? 'updated' : 'uploaded'} successfully!`, 'success');
         
-        // Clear form
+        // Clear form and reset button
         document.getElementById('docTitle').value = '';
         document.getElementById('docContent').value = '';
+        const uploadBtn = document.getElementById('uploadDocBtn');
+        uploadBtn.innerHTML = '<i class="bi bi-cloud-upload"></i> Upload Document';
+        delete uploadBtn.dataset.editingId;
         
         // Refresh document list
         await loadDocuments();
     } catch (error) {
         showAlert('Error: ' + error.message, 'danger');
     } finally {
-        hideLoading('uploadDocBtn', '<i class="bi bi-cloud-upload"></i> Upload Document');
+        const uploadBtn = document.getElementById('uploadDocBtn');
+        hideLoading('uploadDocBtn', uploadBtn.dataset.originalText || '<i class="bi bi-cloud-upload"></i> Upload Document');
     }
 });
 
@@ -162,9 +171,17 @@ async function loadDocuments() {
                         <h6 class="mb-1">${doc.title}</h6>
                         <small class="text-muted">ID: ${doc.doc_id} | Language: ${doc.language}</small>
                     </div>
-                    <button class="btn btn-sm btn-danger" onclick="deleteDocument('${doc.doc_id}')">
-                        <i class="bi bi-trash"></i> Delete
-                    </button>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-info" onclick="viewDocument(${doc.doc_id})">
+                            <i class="bi bi-eye"></i> View
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="editDocument(${doc.doc_id})">
+                            <i class="bi bi-pencil"></i> Edit
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDocument(${doc.doc_id})">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </div>
                 </div>
             `;
             listContainer.appendChild(docElement);
@@ -174,22 +191,53 @@ async function loadDocuments() {
     }
 }
 
-async function deleteDocument(docId) {
-    if (!confirm('Are you sure you want to delete this document?')) {
-        return;
-    }
-    
+async function viewDocument(docId) {
     try {
-        const response = await fetch(`${API_URL}/documents/${docId}`, {
-            method: 'DELETE'
-        });
+        const response = await fetch(`${API_URL}/documents/${docId}`);
+        const doc = await response.json();
         
-        if (!response.ok) {
-            throw new Error('Delete failed');
-        }
+        const content = `
+            <strong>Title:</strong> ${doc.title}<br>
+            <strong>Language:</strong> ${doc.language}<br>
+            <strong>Created:</strong> ${doc.created_at}<br><br>
+            <strong>Content:</strong><br>
+            <p style="border: 1px solid #ddd; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
+                ${doc.content.replace(/\n/g, '<br>')}
+            </p>
+        `;
         
-        showAlert('Document deleted successfully', 'success');
-        await loadDocuments();
+        showModalAlert('View Document', content);
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    }
+}
+
+async function editDocument(docId) {
+    try {
+        const response = await fetch(`${API_URL}/documents/${docId}`);
+        const doc = await response.json();
+        
+        // Populate form with current data
+        document.getElementById('docTitle').value = doc.title;
+        document.getElementById('docContent').value = doc.content;
+        document.getElementById('docLanguage').value = doc.language;
+        
+        // Change button to save mode
+        const uploadBtn = document.getElementById('uploadDocBtn');
+        const originalText = uploadBtn.innerHTML;
+        
+        uploadBtn.innerHTML = '<i class="bi bi-check-circle"></i> Update Document';
+        uploadBtn.dataset.editingId = docId;
+        uploadBtn.dataset.originalText = originalText;
+        
+        // Switch to documents tab
+        const documentsTab = new bootstrap.Tab(document.getElementById('documents-tab'));
+        documentsTab.show();
+        
+        // Scroll to form
+        document.getElementById('docTitle').scrollIntoView({ behavior: 'smooth' });
+        
+        showAlert('Loaded document for editing. Click "Update Document" to save changes.', 'info');
     } catch (error) {
         showAlert('Error: ' + error.message, 'danger');
     }
@@ -392,3 +440,51 @@ document.getElementById('speakTranslationBtn')?.addEventListener('click', async 
 document.addEventListener('DOMContentLoaded', function() {
     loadDocuments();
 });
+
+// Helper function to show modal alert for viewing documents
+function showModalAlert(title, content) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">${title}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    ${content}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    modal.addEventListener('hidden.bs.modal', () => modal.remove());
+}
+
+// Delete document function
+async function deleteDocument(docId) {
+    if (!confirm('Are you sure you want to delete this document?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/documents/${docId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Delete failed');
+        }
+        
+        showAlert('Document deleted successfully', 'success');
+        await loadDocuments();
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    }
+}

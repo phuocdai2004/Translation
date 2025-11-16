@@ -14,12 +14,17 @@ import os
 logger = logging.getLogger(__name__)
 
 try:
+    # Try to import - if fails, embeddings disabled
     from sentence_transformers import SentenceTransformer
     import annoy
     EMBEDDINGS_AVAILABLE = True
 except ImportError as e:
     EMBEDDINGS_AVAILABLE = False
     logger.warning(f"Embeddings not available: {e}")
+except Exception as e:
+    # Catch any other import errors (e.g., torch issues)
+    EMBEDDINGS_AVAILABLE = False
+    logger.warning(f"Could not load embeddings library: {e}")
 
 # Global embedding model (lazy load)
 embedding_model = None
