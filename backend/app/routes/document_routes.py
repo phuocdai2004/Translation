@@ -2,7 +2,7 @@
 Document management API routes
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 import logging
 from typing import List
 from sqlalchemy.orm import Session
@@ -10,6 +10,8 @@ from sqlalchemy import text
 from app.models.document import DocumentUpload
 from app.database import get_session
 import json
+import os
+from pathlib import Path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -77,6 +79,115 @@ async def upload_document(document: DocumentUpload, session: Session = Depends(g
             "status": "indexed",
             "message": "Document successfully uploaded and indexed"
         }
+    
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document upload failed: {str(e)}"
+        )
+
+
+@router.post("/documents/upload-file")
+async def upload_file(file: UploadFile = File(...), language: str = "en", session: Session = Depends(get_session)):
+    """
+    Upload document from file (PDF, TXT, DOCX)
+    
+    ### Parameters:
+    - **file**: Document file (PDF, TXT, DOCX)
+    - **language**: Document language (en, vi)
+    
+    ### Returns:
+    - Document ID and confirmation
+    """
+    from app.utils.embedding_utils import serialize_embedding
+    from app.services.embedding_service import get_embedding, add_to_index
+    
+    try:
+        # Validate file type
+        allowed_extensions = {'.txt', '.pdf', '.docx'}
+        file_ext = Path(file.filename).suffix.lower()
+        
+        if file_ext not in allowed_extensions:
+            raise HTTPException(status_code=400, detail=f"File type {file_ext} not supported. Use: {allowed_extensions}")
+        
+        # Read file content
+        content = await file.read()
+        
+        if file_ext == '.txt':
+            text_content = content.decode('utf-8', errors='ignore')
+        elif file_ext == '.pdf':
+            # Simple PDF extraction (install pypdf2)
+            try:
+                import pypdf
+                pdf_reader = pypdf.PdfReader(file.file)
+                text_content = "\n".join([page.extract_text() for page in pdf_reader.pages])
+            except:
+                logger.warning("pypdf not installed, saving raw file")
+                text_content = f"[PDF content - {len(content)} bytes]"
+        elif file_ext == '.docx':
+            # Simple DOCX extraction (install python-docx)
+            try:
+                from docx import Document
+                doc = Document(file.file)
+                text_content = "\n".join([para.text for para in doc.paragraphs])
+            except:
+                logger.warning("python-docx not installed, saving raw file")
+                text_content = f"[DOCX content - {len(content)} bytes]"
+        else:
+            text_content = content.decode('utf-8', errors='ignore')
+        
+        # Extract title from filename
+        title = Path(file.filename).stem
+        
+        # Insert into database
+        metadata_json = json.dumps({"filename": file.filename, "file_type": file_ext})
+        result = session.execute(
+            text("""
+                INSERT INTO document (title, content, language, doc_metadata, created_at)
+                VALUES (:title, :content, :language, :doc_metadata, CURRENT_TIMESTAMP)
+            """),
+            {
+                "title": title,
+                "content": text_content,
+                "language": language,
+                "doc_metadata": metadata_json
+            }
+        )
+        session.commit()
+        doc_id = result.lastrowid
+        
+        # Generate embedding
+        embedding = get_embedding(text_content)
+        if embedding is not None:
+            embedding_bytes = serialize_embedding(embedding)
+            session.execute(
+                text("UPDATE document SET embedding = :embedding WHERE id = :id"),
+                {"embedding": embedding_bytes, "id": doc_id}
+            )
+            session.commit()
+            add_to_index(doc_id, embedding)
+            logger.info(f"✓ Embedding created and indexed for doc_id={doc_id}")
+        
+        logger.info(f"File uploaded: id={doc_id} - {title} ({file_ext})")
+        
+        return {
+            "doc_id": doc_id,
+            "title": title,
+            "filename": file.filename,
+            "file_type": file_ext,
+            "status": "indexed",
+            "message": "File successfully uploaded and indexed"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"File upload error: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"File upload failed: {str(e)}"
+        )
     
     except Exception as e:
         logger.error(f"Upload error: {e}")

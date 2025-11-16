@@ -125,3 +125,4 @@ Set-Location $BACKEND_DIR
 & $VENV_PYTHON -m uvicorn main:app --host 127.0.0.1 --port 8000
 
 Write-Host "Server stopped." -ForegroundColor Yellow
+# e:\haystack\start.bat

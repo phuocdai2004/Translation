@@ -149,6 +149,56 @@ document.getElementById('uploadDocBtn')?.addEventListener('click', async functio
     }
 });
 
+// File Upload Handler
+document.getElementById('uploadFileBtn')?.addEventListener('click', async function() {
+    const fileInput = document.getElementById('docFile');
+    const file = fileInput.files[0];
+    const language = document.getElementById('fileLanguage').value;
+    
+    if (!file) {
+        showAlert('Please select a file', 'warning');
+        return;
+    }
+    
+    // Check file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        showAlert('File size exceeds 10MB limit', 'warning');
+        return;
+    }
+    
+    showLoading('uploadFileBtn', '<i class="bi bi-file-earmark-arrow-up"></i> Uploading...');
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('language', language);
+        
+        const response = await fetch(`${API_URL}/documents/upload-file`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Upload failed');
+        }
+        
+        const data = await response.json();
+        showAlert(`File "${data.filename}" uploaded successfully!`, 'success');
+        
+        // Clear form
+        fileInput.value = '';
+        
+        // Refresh document list
+        await loadDocuments();
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        hideLoading('uploadFileBtn', '<i class="bi bi-file-earmark-arrow-up"></i> Upload File');
+    }
+});
+
 async function loadDocuments() {
     try {
         const response = await fetch(`${API_URL}/documents/list`);
@@ -158,30 +208,40 @@ async function loadDocuments() {
         listContainer.innerHTML = '';
         
         if (data.documents.length === 0) {
-            listContainer.innerHTML = '<p class="text-muted">No documents uploaded yet</p>';
+            listContainer.innerHTML = `
+                <div class="documents-empty">
+                    <i class="bi bi-file-earmark"></i>
+                    <p>No documents uploaded yet</p>
+                    <small>Upload a document to get started</small>
+                </div>
+            `;
             return;
         }
         
         data.documents.forEach(doc => {
+            const preview = doc.content.substring(0, 100) + (doc.content.length > 100 ? '...' : '');
             const docElement = document.createElement('div');
-            docElement.className = 'result-item';
+            docElement.className = 'document-item';
             docElement.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h6 class="mb-1">${doc.title}</h6>
-                        <small class="text-muted">ID: ${doc.doc_id} | Language: ${doc.language}</small>
+                <div class="document-item-content">
+                    <div class="document-item-title">
+                        <i class="bi bi-file-text"></i>
+                        ${doc.title}
                     </div>
-                    <div class="btn-group" role="group">
-                        <button class="btn btn-sm btn-info" onclick="viewDocument(${doc.doc_id})">
-                            <i class="bi bi-eye"></i> View
-                        </button>
-                        <button class="btn btn-sm btn-warning" onclick="editDocument(${doc.doc_id})">
-                            <i class="bi bi-pencil"></i> Edit
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteDocument(${doc.doc_id})">
-                            <i class="bi bi-trash"></i> Delete
-                        </button>
+                    <div class="document-item-preview">${preview}</div>
+                    <div class="document-item-meta">
+                        <span><i class="bi bi-globe"></i> ${doc.language.toUpperCase()}</span>
+                        <span><i class="bi bi-calendar-event"></i> ${new Date(doc.created_at).toLocaleDateString()}</span>
+                        <span><i class="bi bi-hash"></i> ID: ${doc.doc_id}</span>
                     </div>
+                </div>
+                <div class="document-item-actions">
+                    <button class="btn-view" onclick="viewDocument(${doc.doc_id})" title="View">
+                        <i class="bi bi-eye"></i> View
+                    </button>
+                    <button class="btn-delete" onclick="deleteDocument(${doc.doc_id})" title="Delete">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
                 </div>
             `;
             listContainer.appendChild(docElement);
@@ -196,14 +256,38 @@ async function viewDocument(docId) {
         const response = await fetch(`${API_URL}/documents/${docId}`);
         const doc = await response.json();
         
+        const createdDate = new Date(doc.created_at).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
         const content = `
-            <strong>Title:</strong> ${doc.title}<br>
-            <strong>Language:</strong> ${doc.language}<br>
-            <strong>Created:</strong> ${doc.created_at}<br><br>
-            <strong>Content:</strong><br>
-            <p style="border: 1px solid #ddd; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
-                ${doc.content.replace(/\n/g, '<br>')}
-            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div>
+                    <strong>📋 Title:</strong><br>
+                    <span style="color: #cbd5e1;">${doc.title}</span>
+                </div>
+                <div>
+                    <strong>🌐 Language:</strong><br>
+                    <span style="color: #cbd5e1;">${doc.language.toUpperCase()}</span>
+                </div>
+                <div>
+                    <strong>📅 Created:</strong><br>
+                    <span style="color: #cbd5e1;">${createdDate}</span>
+                </div>
+                <div>
+                    <strong>🔢 Document ID:</strong><br>
+                    <span style="color: #cbd5e1;">ID-${doc.doc_id}</span>
+                </div>
+            </div>
+            
+            <div style="border-top: 1px solid rgba(99, 102, 241, 0.3); padding-top: 1.5rem;">
+                <strong style="display: block; margin-bottom: 1rem; font-size: 1.1rem;">📝 Content:</strong>
+                <p>${doc.content.replace(/\n/g, '<br>')}</p>
+            </div>
         `;
         
         showModalAlert('View Document', content);
@@ -241,73 +325,6 @@ async function editDocument(docId) {
     } catch (error) {
         showAlert('Error: ' + error.message, 'danger');
     }
-}
-
-// Search Functions
-document.getElementById('searchBtn')?.addEventListener('click', async function() {
-    const query = document.getElementById('searchQuery').value.trim();
-    const topK = parseInt(document.getElementById('topK').value);
-    
-    if (!query) {
-        showAlert('Please enter a search query', 'warning');
-        return;
-    }
-    
-    showLoading('searchBtn', '<i class="bi bi-search"></i> Search');
-    
-    try {
-        const response = await fetch(`${API_URL}/search`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                query: query,
-                top_k: topK
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Search failed');
-        }
-        
-        const data = await response.json();
-        displaySearchResults(data);
-        
-        if (data.results.length === 0) {
-            document.getElementById('noResults').style.display = 'block';
-            document.getElementById('searchResults').style.display = 'none';
-        }
-    } catch (error) {
-        showAlert('Error: ' + error.message, 'danger');
-    } finally {
-        hideLoading('searchBtn', '<i class="bi bi-search"></i> Search');
-    }
-});
-
-function displaySearchResults(data) {
-    document.getElementById('searchResults').style.display = 'block';
-    document.getElementById('noResults').style.display = 'none';
-    
-    const container = document.getElementById('resultsContainer');
-    container.innerHTML = '';
-    
-    data.results.forEach((result, index) => {
-        const resultElement = document.createElement('div');
-        resultElement.className = 'result-item';
-        resultElement.innerHTML = `
-            <div class="d-flex justify-content-between align-items-start mb-2">
-                <h6 class="mb-0">${index + 1}. ${result.title}</h6>
-                <span class="result-score">${(result.score * 100).toFixed(1)}%</span>
-            </div>
-            <p class="text-muted small">${result.content}</p>
-            <small class="text-muted">ID: ${result.doc_id}</small>
-        `;
-        container.appendChild(resultElement);
-    });
-    
-    const stats = document.getElementById('searchStats');
-    stats.textContent = `Found ${data.total_results} result(s) in ${(data.processing_time * 1000).toFixed(2)}ms`;
 }
 
 // Web Search Functions
@@ -435,6 +452,118 @@ document.getElementById('speakTranslationBtn')?.addEventListener('click', async 
         btn.innerHTML = originalHTML;
     }
 });
+
+// Document Search Functions
+document.getElementById('docSearchBtn')?.addEventListener('click', async function() {
+    const query = document.getElementById('docSearchInput').value.trim();
+    
+    if (!query) {
+        showAlert('Please enter a search query', 'warning');
+        return;
+    }
+    
+    showLoading('docSearchBtn', '<span class="spinner-border spinner-border-sm" role="status"></span> Searching...');
+    
+    try {
+        const response = await fetch(`${API_URL}/search`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: query,
+                top_k: 10
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Search failed');
+        }
+        
+        const data = await response.json();
+        displaySearchResults(data);
+        
+        document.getElementById('docSearchClear').style.display = 'inline-block';
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        hideLoading('docSearchBtn', '<i class="bi bi-search"></i> Search');
+    }
+});
+
+// Clear search
+document.getElementById('docSearchClear')?.addEventListener('click', function() {
+    document.getElementById('docSearchInput').value = '';
+    document.getElementById('docSearchClear').style.display = 'none';
+    document.getElementById('searchResultsSection').style.display = 'none';
+    document.getElementById('allDocumentsSection').style.display = 'block';
+});
+
+// Search on Enter key
+document.getElementById('docSearchInput')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('docSearchBtn').click();
+    }
+});
+
+function displaySearchResults(data) {
+    const resultsContainer = document.getElementById('searchResultsList');
+    const searchSection = document.getElementById('searchResultsSection');
+    const allDocsSection = document.getElementById('allDocumentsSection');
+    
+    resultsContainer.innerHTML = '';
+    
+    if (data.results.length === 0) {
+        resultsContainer.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="bi bi-search"></i> No documents found matching your query.
+            </div>
+        `;
+        searchSection.style.display = 'block';
+        allDocsSection.style.display = 'none';
+        return;
+    }
+    
+    // Update count
+    document.getElementById('searchResultsCount').textContent = data.results.length;
+    
+    // Display results
+    data.results.forEach((result, index) => {
+        const scorePercentage = Math.round(result.score * 100);
+        const resultElement = document.createElement('div');
+        resultElement.className = 'search-result-item';
+        resultElement.innerHTML = `
+            <div class="search-result-title">
+                <i class="bi bi-file-earmark-text"></i>
+                ${result.title}
+                <span class="search-result-score" style="margin-left: auto;">
+                    📊 ${scorePercentage}% match
+                </span>
+            </div>
+            <div class="search-result-excerpt">
+                ${result.content}
+            </div>
+            <div class="search-result-meta">
+                <div>
+                    <i class="bi bi-file-earmark"></i>
+                    <span>ID: ${result.doc_id}</span>
+                </div>
+            </div>
+            <div class="search-result-actions">
+                <button class="btn btn-sm btn-success" onclick="viewDocument(${result.doc_id})">
+                    <i class="bi bi-eye"></i> View Full
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteDocument(${result.doc_id})">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+            </div>
+        `;
+        resultsContainer.appendChild(resultElement);
+    });
+    
+    searchSection.style.display = 'block';
+    allDocsSection.style.display = 'none';
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
