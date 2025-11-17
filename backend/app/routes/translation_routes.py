@@ -87,11 +87,17 @@ async def translate_text(request: TranslationRequest):
         # Google Translate returns nested array: [[[translated_text, original_text, ...]]]
         result = response.json()
         
-        if result and len(result) > 0 and len(result[0]) > 0 and len(result[0][0]) > 0:
-            translated_text = result[0][0][0]
+        if result and len(result) > 0 and len(result[0]) > 0:
+            # Collect all translated sentences (not just first one)
+            translated_parts = []
+            for translation_pair in result[0]:
+                if len(translation_pair) > 0 and translation_pair[0]:
+                    translated_parts.append(translation_pair[0])
+            
+            translated_text = "".join(translated_parts)
             
             if translated_text:
-                logger.info(f"✓ Translation successful: '{request.text[:40]}' -> '{translated_text[:40]}'")
+                logger.info(f"✓ Translation successful: '{request.text[:40]}...' -> '{translated_text[:40]}...'")
                 return TranslationResponse(
                     original_text=request.text,
                     translated_text=translated_text,
