@@ -46,6 +46,15 @@ if frontend_path.exists():
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
 
 
+@app.get("/")
+async def root():
+    """Root endpoint - serve index.html"""
+    frontend_file = Path(__file__).parent.parent / "frontend" / "index.html"
+    if frontend_file.exists():
+        return FileResponse(frontend_file)
+    return {"message": "Welcome to Haystack Translation"}
+
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
